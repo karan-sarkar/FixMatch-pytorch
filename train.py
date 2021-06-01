@@ -242,22 +242,32 @@ def main():
     
     c_params = [(n,p) for n, p in model.named_parameters() if n == 'conv1.weight' or 'block1' in n or 'block2' in n]
     g_params = [(n,p) for n, p in model.named_parameters() if n != 'conv1.weight' and 'block1' not in n and 'block2' not in n]
-    print(c_params)
-    print('G', g_params)
     
     no_decay = ['bias', 'bn']
-    grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(
+    grouped_parameters_c = [
+        {'params': [p for n, p in c_params if not any(
             nd in n for nd in no_decay)], 'weight_decay': args.wdecay},
-        {'params': [p for n, p in model.named_parameters() if any(
+        {'params': [p for n, p in c_params if any(
             nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = optim.SGD(grouped_parameters, lr=args.lr,
+    grouped_parameters_g = [
+        {'params': [p for n, p in g_params if not any(
+            nd in n for nd in no_decay)], 'weight_decay': args.wdecay},
+        {'params': [p for n, p in g_params if any(
+            nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
+    
+    
+    optimizer_c = optim.SGD(grouped_parameters_c, lr=args.lr,
+                          momentum=0.9, nesterov=args.nesterov)
+    optimizer_g = optim.SGD(grouped_parameters_g, lr=args.lr,
                           momentum=0.9, nesterov=args.nesterov)
 
     args.epochs = math.ceil(args.total_steps / args.eval_step)
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer, args.warmup, args.total_steps)
+    scheduler_c = get_cosine_schedule_with_warmup(
+        optimizer_c, args.warmup, args.total_steps)
+    scheduler_g = get_cosine_schedule_with_warmup(
+        optimizer_g, args.warmup, args.total_steps)
 
     if args.use_ema:
         from models.ema import ModelEMA
@@ -276,14 +286,18 @@ def main():
         model.load_state_dict(checkpoint['state_dict'])
         if args.use_ema:
             ema_model.ema.load_state_dict(checkpoint['ema_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        scheduler.load_state_dict(checkpoint['scheduler'])
-
+        optimizer_c.load_state_dict(checkpoint['optimizer_c'])
+        optimizer_g.load_state_dict(checkpoint['optimizer_g'])
+        scheduler_c.load_state_dict(checkpoint['scheduler_c'])
+        scheduler_g.load_state_dict(checkpoint['scheduler_g'])
+    
+    '''
     if args.amp:
         from apex import amp
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
-
+    '''
+    
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[args.local_rank],
@@ -299,11 +313,11 @@ def main():
 
     model.zero_grad()
     train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler)
+          model, optimizer_c, optimizer_g, ema_model, scheduler_c, scheduler_g)
 
 
 def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
-          model, optimizer, ema_model, scheduler):
+          model, optimizer_c, optimizer_g, ema_model, scheduler_c, scheduler_g):
     if args.amp:
         from apex import amp
     global best_acc
@@ -362,6 +376,69 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
 
+            loss = Lx
+            '''
+            if args.amp:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+            '''
+            loss.backward()
+
+            losses.update(loss.item())
+            losses_x.update(Lx.item())
+            losses_u.update(Lu.item())
+            optimizer_c.step()
+            scheduler_c.step()
+            optimizer_g.step()
+            scheduler_g.step()
+            if args.use_ema:
+                ema_model.update(model)
+            model.zero_grad()
+        
+        
+       
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            try:
+                inputs_x, targets_x = labeled_iter.next()
+            except:
+                if args.world_size > 1:
+                    labeled_epoch += 1
+                    labeled_trainloader.sampler.set_epoch(labeled_epoch)
+                labeled_iter = iter(labeled_trainloader)
+                inputs_x, targets_x = labeled_iter.next()
+
+            try:
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+            except:
+                if args.world_size > 1:
+                    unlabeled_epoch += 1
+                    unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+                unlabeled_iter = iter(unlabeled_trainloader)
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+
+            data_time.update(time.time() - end)
+            batch_size = inputs_x.shape[0]
+            inputs = interleave(
+                torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
+            targets_x = targets_x.to(args.device)
+            logits = model(inputs)
+            logits = de_interleave(logits, 2*args.mu+1)
+            logits_x = logits[:batch_size]
+            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+            del logits
+
+            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+
             pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(args.threshold).float()
@@ -369,22 +446,90 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             Lu = (F.cross_entropy(logits_u_s, targets_u,
                                   reduction='none') * mask).mean()
 
-            loss = Lx + args.lambda_u * Lu
-
+            loss = Lx - args.lambda_u * Lu
+            '''
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
-                loss.backward()
+            '''
+            loss.backward()
 
             losses.update(loss.item())
             losses_x.update(Lx.item())
             losses_u.update(Lu.item())
-            optimizer.step()
-            scheduler.step()
+            optimizer_c.step()
+            scheduler_c.step()
             if args.use_ema:
                 ema_model.update(model)
             model.zero_grad()
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            try:
+                inputs_x, targets_x = labeled_iter.next()
+            except:
+                if args.world_size > 1:
+                    labeled_epoch += 1
+                    labeled_trainloader.sampler.set_epoch(labeled_epoch)
+                labeled_iter = iter(labeled_trainloader)
+                inputs_x, targets_x = labeled_iter.next()
+
+            try:
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+            except:
+                if args.world_size > 1:
+                    unlabeled_epoch += 1
+                    unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+                unlabeled_iter = iter(unlabeled_trainloader)
+                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+
+            data_time.update(time.time() - end)
+            batch_size = inputs_x.shape[0]
+            inputs = interleave(
+                torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
+            targets_x = targets_x.to(args.device)
+            logits = model(inputs)
+            logits = de_interleave(logits, 2*args.mu+1)
+            logits_x = logits[:batch_size]
+            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+            del logits
+
+            
+
+            pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
+            max_probs, targets_u = torch.max(pseudo_label, dim=-1)
+            mask = max_probs.ge(args.threshold).float()
+
+            Lu = (F.cross_entropy(logits_u_s, targets_u,
+                                  reduction='none') * mask).mean()
+
+            loss = Lu
+            '''
+            if args.amp:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+            '''
+            loss.backward()
+
+            losses.update(loss.item())
+            losses_x.update(Lx.item())
+            losses_u.update(Lu.item())
+            optimizer_c.step()
+            scheduler_c.step()
+            if args.use_ema:
+                ema_model.update(model)
+            model.zero_grad()
+            
+            
 
             batch_time.update(time.time() - end)
             end = time.time()
@@ -395,7 +540,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                     epochs=args.epochs,
                     batch=batch_idx + 1,
                     iter=args.eval_step,
-                    lr=scheduler.get_last_lr()[0],
+                    lr=scheduler_c.get_last_lr()[0],
                     data=data_time.avg,
                     bt=batch_time.avg,
                     loss=losses.avg,
@@ -435,8 +580,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 'ema_state_dict': ema_to_save.state_dict() if args.use_ema else None,
                 'acc': test_acc,
                 'best_acc': best_acc,
-                'optimizer': optimizer.state_dict(),
-                'scheduler': scheduler.state_dict(),
+                'optimizer_c': optimizer_c.state_dict(),
+                'optimizer_g': optimizer_g.state_dict(),
+                'scheduler_c': scheduler_c.state_dict(),
+                'scheduler_g': scheduler_g.state_dict(),
             }, is_best, args.out)
 
             test_accs.append(test_acc)
