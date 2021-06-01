@@ -455,7 +455,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
             losses.update(loss.item())
             losses_x.update(Lx.item())
-            losses_u.update(Lu.item())
+            #losses_u.update(Lu.item())
             optimizer_c.step()
             scheduler_c.step()
             if args.use_ema:
