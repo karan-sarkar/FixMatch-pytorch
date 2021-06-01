@@ -442,7 +442,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(args.threshold).float()
 
-            Lu = F.cross_entropy(logits_u_s, targets_u, reduction='mean')
+            Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
 
             loss = Lx - args.lambda_u * Lu
             '''
@@ -500,7 +500,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
                 del logits
 
-                
+                Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
 
                 pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
                 max_probs, targets_u = torch.max(pseudo_label, dim=-1)
@@ -508,7 +508,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
                 Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
 
-                loss = Lu
+                loss = Lx + args.lambda_u * Lu
                 '''
                 if args.amp:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
