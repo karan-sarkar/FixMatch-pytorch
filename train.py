@@ -241,7 +241,7 @@ def main():
     model.to(args.device)
     
     c_params = [(n,p) for n, p in model.named_parameters() if n == 'conv1.weight' or 'block1' in n or 'block2' in n]
-    g_params = [(n,p) for n, p in model.named_parameters() if n != 'conv1.weight' and 'block1' not in n and 'block2' not in in n]
+    g_params = [(n,p) for n, p in model.named_parameters() if n != 'conv1.weight' and 'block1' not in n and 'block2' not in n]
     print(c_params)
     print('G', g_params)
     
