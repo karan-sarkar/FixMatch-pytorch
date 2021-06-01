@@ -239,7 +239,12 @@ def main():
         torch.distributed.barrier()
 
     model.to(args.device)
-    print([n for n, p in model.named_parameters()])
+    
+    c_params = [(n,p) for n, p in model.named_parameters() if n == 'conv1.weight' or 'block1' in n or 'block2' in n]
+    g_params = [(n,p) for n, p in model.named_parameters() if n != 'conv1.weight' and 'block1' not in n and 'block2' not in in n]
+    print(c_params)
+    print('G', g_params)
+    
     no_decay = ['bias', 'bn']
     grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(
