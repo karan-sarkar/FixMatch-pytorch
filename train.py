@@ -442,7 +442,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(args.threshold).float()
 
-            Lu = (F.cross_entropy(logits_u_s, targets_u,
+            Lu = (F.l1_loss(torch.softmax(logits_u_s), F.one_hot(targets_u, 10),
                                   reduction='none') * mask).mean()
 
             loss = Lx - args.lambda_u * Lu
@@ -470,62 +470,62 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             
             
             
+            for _ in range(4):
             
-            
-            try:
-                inputs_x, targets_x = labeled_iter.next()
-            except:
-                if args.world_size > 1:
-                    labeled_epoch += 1
-                    labeled_trainloader.sampler.set_epoch(labeled_epoch)
-                labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                try:
+                    inputs_x, targets_x = labeled_iter.next()
+                except:
+                    if args.world_size > 1:
+                        labeled_epoch += 1
+                        labeled_trainloader.sampler.set_epoch(labeled_epoch)
+                    labeled_iter = iter(labeled_trainloader)
+                    inputs_x, targets_x = labeled_iter.next()
 
-            try:
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
-            except:
-                if args.world_size > 1:
-                    unlabeled_epoch += 1
-                    unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
-                unlabeled_iter = iter(unlabeled_trainloader)
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                try:
+                    (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                except:
+                    if args.world_size > 1:
+                        unlabeled_epoch += 1
+                        unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+                    unlabeled_iter = iter(unlabeled_trainloader)
+                    (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
 
-            data_time.update(time.time() - end)
-            batch_size = inputs_x.shape[0]
-            inputs = interleave(
-                torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
-            targets_x = targets_x.to(args.device)
-            logits = model(inputs)
-            logits = de_interleave(logits, 2*args.mu+1)
-            logits_x = logits[:batch_size]
-            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-            del logits
+                data_time.update(time.time() - end)
+                batch_size = inputs_x.shape[0]
+                inputs = interleave(
+                    torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
+                targets_x = targets_x.to(args.device)
+                logits = model(inputs)
+                logits = de_interleave(logits, 2*args.mu+1)
+                logits_x = logits[:batch_size]
+                logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+                del logits
 
-            
+                
 
-            pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
-            max_probs, targets_u = torch.max(pseudo_label, dim=-1)
-            mask = max_probs.ge(args.threshold).float()
+                pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
+                max_probs, targets_u = torch.max(pseudo_label, dim=-1)
+                mask = max_probs.ge(args.threshold).float()
 
-            Lu = (F.cross_entropy(logits_u_s, targets_u,
+                Lu = (F.l1_loss(torch.softmax(logits_u_s), F.one_hot(targets_u, 10),
                                   reduction='none') * mask).mean()
 
-            loss = Lu
-            '''
-            if args.amp:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-            '''
-            loss.backward()
+                loss = Lu
+                '''
+                if args.amp:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                '''
+                loss.backward()
 
-            losses.update(loss.item())
-            losses_u.update(Lu.item())
-            optimizer_g.step()
-            scheduler_g.step()
-            if args.use_ema:
-                ema_model.update(model)
-            model.zero_grad()
+                losses.update(loss.item())
+                losses_u.update(Lu.item())
+                optimizer_g.step()
+                scheduler_g.step()
+                if args.use_ema:
+                    ema_model.update(model)
+                model.zero_grad()
             
             
 
