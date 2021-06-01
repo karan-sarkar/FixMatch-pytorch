@@ -239,7 +239,7 @@ def main():
         torch.distributed.barrier()
 
     model.to(args.device)
-
+    print([n for n, p in model.named_parameters()])
     no_decay = ['bias', 'bn']
     grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(
