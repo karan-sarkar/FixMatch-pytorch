@@ -372,7 +372,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             logits = de_interleave(logits, 2*args.mu+1)
             logits_x = logits[:batch_size]
             logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-            logits_x_s = model(inputs_x_s)
+            logits_x_s = model(inputs_x_s.to(args.device))
             del logits
 
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
@@ -435,7 +435,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             logits = de_interleave(logits, 2*args.mu+1)
             logits_x = logits[:batch_size]
             logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-            logits_x_s = model(inputs_x_s)
+            logits_x_s = model(inputs_x_s.to(args.device))
             del logits
 
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
@@ -500,7 +500,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 logits = de_interleave(logits, 2*args.mu+1)
                 logits_x = logits[:batch_size]
                 logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-                logits_x_s = model(inputs_x_s)
+                logits_x_s = model(inputs_x_s.to(args.device))
                 del logits
 
                 Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
