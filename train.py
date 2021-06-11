@@ -346,13 +346,13 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                          disable=args.local_rank not in [-1, 0])
         for batch_idx in range(args.eval_step):
             try:
-                inputs_x, targets_x = labeled_iter.next()
+                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
             except:
                 if args.world_size > 1:
                     labeled_epoch += 1
                     labeled_trainloader.sampler.set_epoch(labeled_epoch)
                 labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
 
             try:
                 (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
@@ -372,9 +372,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             logits = de_interleave(logits, 2*args.mu+1)
             logits_x = logits[:batch_size]
             logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+            logits_x_s = model(inputs_x_s)
             del logits
 
-            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
 
             loss = Lx
             '''
@@ -408,13 +409,13 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
         
         
             try:
-                inputs_x, targets_x = labeled_iter.next()
+                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
             except:
                 if args.world_size > 1:
                     labeled_epoch += 1
                     labeled_trainloader.sampler.set_epoch(labeled_epoch)
                 labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
 
             try:
                 (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
@@ -434,9 +435,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             logits = de_interleave(logits, 2*args.mu+1)
             logits_x = logits[:batch_size]
             logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+            logits_x_s = model(inputs_x_s)
             del logits
 
-            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
 
             pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
@@ -472,13 +474,13 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             for _ in range(4):
             
                 try:
-                    inputs_x, targets_x = labeled_iter.next()
+                    (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
                 except:
                     if args.world_size > 1:
                         labeled_epoch += 1
                         labeled_trainloader.sampler.set_epoch(labeled_epoch)
                     labeled_iter = iter(labeled_trainloader)
-                    inputs_x, targets_x = labeled_iter.next()
+                    (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
 
                 try:
                     (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
@@ -498,9 +500,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 logits = de_interleave(logits, 2*args.mu+1)
                 logits_x = logits[:batch_size]
                 logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+                logits_x_s = model(inputs_x_s)
                 del logits
 
-                Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+                Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
 
                 pseudo_label = torch.softmax(logits_u_w.detach()/args.T, dim=-1)
                 max_probs, targets_u = torch.max(pseudo_label, dim=-1)

@@ -38,7 +38,7 @@ def get_cifar10(args, root):
 
     train_labeled_dataset = CIFAR10SSL(
         root, train_labeled_idxs, train=True,
-        transform=transform_labeled)
+        transform=TransformFixMatch(mean=cifar10_mean, std=cifar10_std))
 
     train_unlabeled_dataset = CIFAR10SSL(
         root, train_unlabeled_idxs, train=True,
