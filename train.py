@@ -471,7 +471,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             
             
             
-            for _ in range(4):
+            for _ in range(1):
             
                 try:
                     (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
