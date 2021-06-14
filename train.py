@@ -446,7 +446,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
             Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
 
-            loss = Lx - args.lambda_u * Lu
+            loss = Lx + args.lambda_u * Lu
             '''
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -511,7 +511,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
 
                 Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
 
-                loss = Lx + args.lambda_u * Lu
+                loss = Lx - args.lambda_u * Lu
                 '''
                 if args.amp:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
