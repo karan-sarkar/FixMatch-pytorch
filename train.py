@@ -444,7 +444,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(args.threshold).float()
 
-            Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
+            Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) * mask).mean()
 
             loss = Lx + args.lambda_u * Lu
             '''
@@ -509,7 +509,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 max_probs, targets_u = torch.max(pseudo_label, dim=-1)
                 mask = max_probs.ge(args.threshold).float()
 
-                Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) ).mean()
+                Lu = (torch.mean(torch.abs(torch.softmax(logits_u_s, -1) - F.one_hot(targets_u, 10)), -1) * mask).mean()
 
                 loss = Lx - args.lambda_u * Lu
                 '''
