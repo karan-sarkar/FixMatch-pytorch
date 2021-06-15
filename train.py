@@ -345,56 +345,58 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             p_bar = tqdm(range(args.eval_step),
                          disable=args.local_rank not in [-1, 0])
         for batch_idx in range(args.eval_step):
-            try:
-                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
-            except:
-                if args.world_size > 1:
-                    labeled_epoch += 1
-                    labeled_trainloader.sampler.set_epoch(labeled_epoch)
-                labeled_iter = iter(labeled_trainloader)
-                (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
+        
+            for _ in range(3):
+                try:
+                    (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
+                except:
+                    if args.world_size > 1:
+                        labeled_epoch += 1
+                        labeled_trainloader.sampler.set_epoch(labeled_epoch)
+                    labeled_iter = iter(labeled_trainloader)
+                    (inputs_x, inputs_x_s), targets_x = labeled_iter.next()
 
-            try:
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
-            except:
-                if args.world_size > 1:
-                    unlabeled_epoch += 1
-                    unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
-                unlabeled_iter = iter(unlabeled_trainloader)
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                try:
+                    (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                except:
+                    if args.world_size > 1:
+                        unlabeled_epoch += 1
+                        unlabeled_trainloader.sampler.set_epoch(unlabeled_epoch)
+                    unlabeled_iter = iter(unlabeled_trainloader)
+                    (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
 
-            data_time.update(time.time() - end)
-            batch_size = inputs_x.shape[0]
-            inputs = interleave(
-                torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
-            targets_x = targets_x.to(args.device)
-            logits = model(inputs)
-            logits = de_interleave(logits, 2*args.mu+1)
-            logits_x = logits[:batch_size]
-            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-            logits_x_s = model(inputs_x_s.to(args.device))
-            del logits
+                data_time.update(time.time() - end)
+                batch_size = inputs_x.shape[0]
+                inputs = interleave(
+                    torch.cat((inputs_x, inputs_u_w, inputs_u_s)), 2*args.mu+1).to(args.device)
+                targets_x = targets_x.to(args.device)
+                logits = model(inputs)
+                logits = de_interleave(logits, 2*args.mu+1)
+                logits_x = logits[:batch_size]
+                logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
+                logits_x_s = model(inputs_x_s.to(args.device))
+                del logits
 
-            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
+                Lx = F.cross_entropy(logits_x, targets_x, reduction='mean') + F.cross_entropy(logits_x_s, targets_x, reduction='mean')
 
-            loss = Lx
-            '''
-            if args.amp:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-            '''
-            loss.backward()
+                loss = Lx
+                '''
+                if args.amp:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                '''
+                loss.backward()
 
-            losses.update(loss.item())
-            losses_x.update(Lx.item())
-            optimizer_c.step()
-            scheduler_c.step()
-            optimizer_g.step()
-            scheduler_g.step()
-            if args.use_ema:
-                ema_model.update(model)
-            model.zero_grad()
+                losses.update(loss.item())
+                losses_x.update(Lx.item())
+                optimizer_c.step()
+                scheduler_c.step()
+                optimizer_g.step()
+                scheduler_g.step()
+                if args.use_ema:
+                    ema_model.update(model)
+                model.zero_grad()
         
         
        
