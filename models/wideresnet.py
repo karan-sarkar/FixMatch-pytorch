@@ -110,10 +110,13 @@ class WideResNet(nn.Module):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
-        out, logvar = torch.chunk(out, 2, 1)
+        mean, logvar = torch.chunk(out, 2, 1)
         if vary:
             std = logvar.exp()
-            out += std * torch.randn_like(out)
+            normal = torch.distributions.normal.Normal(mean, std)
+            out = normal.rsample()
+        else:
+            out = mean
         out = self.block3(out)
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
