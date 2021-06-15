@@ -110,10 +110,10 @@ class WideResNet(nn.Module):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
-        #mean, logvar = torch.chunk(out, 2, 1)
-        mean, logvar = out[:, :out.size(1) // 2], out[:, out.size(1) // 2:]
+        mean, logvar = torch.chunk(out, 2, 1)
+        print(mean.max(), mean.min(), logvar.max(), logvar.min())
         if vary:
-            std = logvar.exp()
+            std = logvar.exp() + 0.1
             normal = torch.distributions.normal.Normal(mean, std)
             out = normal.rsample()
         else:
