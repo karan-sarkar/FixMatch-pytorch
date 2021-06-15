@@ -84,7 +84,7 @@ class WideResNet(nn.Module):
             n, channels[0], channels[1], block, 1, drop_rate, activate_before_residual=True)
         # 2nd block
         self.block2 = NetworkBlock(
-            n, channels[1], channels[2], block, 2, drop_rate)
+            n, channels[1], 2 * channels[2], block, 2, drop_rate)
         # 3rd block
         self.block3 = NetworkBlock(
             n, channels[2], channels[3], block, 2, drop_rate)
@@ -106,10 +106,14 @@ class WideResNet(nn.Module):
                 nn.init.xavier_normal_(m.weight)
                 nn.init.constant_(m.bias, 0.0)
 
-    def forward(self, x):
+    def forward(self, x, vary=True):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
+        out, logvar = torch.chunk(out, 2, 1)
+        if vary:
+            std = logvar.exp()
+            out += std * torch.randn_like(out)
         out = self.block3(out)
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
