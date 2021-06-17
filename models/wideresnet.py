@@ -109,7 +109,7 @@ class WideResNet(nn.Module):
     def forward(self, x, vary=True):
         out = self.conv1(x)
         out = self.block1(out)
-        out, change = self.block2(out).chunk(1)
+        out, change = self.block2(out).chunk(chunks=2, dim=1)
         if vary:
             out += change * torch.randn_like(out)
         out = self.block3(out)
