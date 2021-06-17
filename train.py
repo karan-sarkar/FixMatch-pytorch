@@ -366,10 +366,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             data_time.update(time.time() - end)
             batch_size = inputs_x.shape[0]
             inputs = interleave(
-                torch.cat((inputs_x, inputs_u_w)), 2*args.mu+1).to(args.device)
+                torch.cat((inputs_x, inputs_u_w)), 2*args.mu).to(args.device)
             targets_x = targets_x.to(args.device)
             logits = model(inputs, vary = False)
-            logits = de_interleave(logits, 2*args.mu+1)
+            logits = de_interleave(logits, 2*args.mu)
             logits_x = logits[:batch_size]
             logits_u_w = logits[batch_size:]
             logits_u_s = model(inputs_u_s.to(args.device))
@@ -430,10 +430,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             data_time.update(time.time() - end)
             batch_size = inputs_x.shape[0]
             inputs = interleave(
-                torch.cat((inputs_x, inputs_u_w)), 2*args.mu+1).to(args.device)
+                torch.cat((inputs_x, inputs_u_w)), 2*args.mu).to(args.device)
             targets_x = targets_x.to(args.device)
             logits = model(inputs, vary = False)
-            logits = de_interleave(logits, 2*args.mu+1)
+            logits = de_interleave(logits, 2*args.mu)
             logits_x = logits[:batch_size]
             logits_u_w = logits[batch_size:]
             logits_u_s = model(inputs_u_s.to(args.device))
@@ -496,10 +496,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                 data_time.update(time.time() - end)
                 batch_size = inputs_x.shape[0]
                 inputs = interleave(
-                    torch.cat((inputs_x, inputs_u_w)), 2*args.mu+1).to(args.device)
+                    torch.cat((inputs_x, inputs_u_w)), 2*args.mu).to(args.device)
                 targets_x = targets_x.to(args.device)
                 logits = model(inputs, vary = False)
-                logits = de_interleave(logits, 2*args.mu+1)
+                logits = de_interleave(logits, 2*args.mu)
                 logits_x = logits[:batch_size]
                 logits_u_w = logits[batch_size:]
                 logits_u_s = model(inputs_u_s.to(args.device))
